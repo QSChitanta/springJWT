@@ -21,8 +21,12 @@ public class User {
     private String name;
     private String username;
     private String password;
-    // when User is loaded, ManyToMany.../.Eager also loads the roles
-    // instead of loading the roles separately
     @ManyToMany(fetch = FetchType.EAGER)
     private Collection<Role> roles = new ArrayList<>();
+
+
+
+
+    // when User is loaded, ManyToMany.../.Eager also loads the roles
+    // instead of loading the roles separately
 }

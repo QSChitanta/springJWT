@@ -28,12 +28,10 @@ import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 
 @Slf4j
 public class CustomAuthorizationFilter extends OncePerRequestFilter {
+    private final String SECRET = "secret";
     /**
      * Determines if the user has access to the application or not.
      * Intercepts every Request that comes into the application
-     * @param request
-     * @param response
-     * @param filterChain
      * @throws ServletException
      * @throws IOException
      */
@@ -45,16 +43,23 @@ public class CustomAuthorizationFilter extends OncePerRequestFilter {
             String authorizationHeader = request.getHeader(AUTHORIZATION);
             if(authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
                 try {
+
+                    // 1. extracts the "Bearer <token string here> out the request authorization header
                     String token = authorizationHeader.substring("Bearer ".length());
-                    Algorithm algorithm = Algorithm.HMAC256("secret".getBytes());
+                    Algorithm algorithm = Algorithm.HMAC256(SECRET.getBytes());
                     JWTVerifier verifier = JWT.require(algorithm).build();
+
+                    // 2. takes the extracted token from the String without the "Bearer"
                     DecodedJWT decodedJWT = verifier.verify(token);
                     String username = decodedJWT.getSubject();
+
+                    // 3. grants the user authorities based on users "role" inside the JSON response object
                     String[] roles = decodedJWT.getClaim("roles").asArray(String.class);
                     Collection<SimpleGrantedAuthority> authorities = new ArrayList<>();
                     stream(roles).forEach(role -> {
                         authorities.add(new SimpleGrantedAuthority(role));
                     });
+
                     UsernamePasswordAuthenticationToken authenticationToken =
                             new UsernamePasswordAuthenticationToken(username, null, authorities);
                     SecurityContextHolder.getContext().setAuthentication(authenticationToken);

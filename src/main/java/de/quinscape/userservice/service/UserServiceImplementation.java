@@ -30,14 +30,18 @@ public class UserServiceImplementation implements UserService, UserDetailsServic
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         User user = userRepository.findByUsername(username);
+        isUserFoundInDatabaseLogger(username, user);
+        Collection<SimpleGrantedAuthority> authorities = grantAuthorities(user);
+        return new org.springframework.security.core.userdetails.User(user.getUsername(), user.getPassword(), authorities);
+    }
+
+    private void isUserFoundInDatabaseLogger(String username, User user) {
         if (user == null) {
             log.error("User not found in the database.");
             throw new UsernameNotFoundException("User not found in the database.");
         } else {
             log.info("User found in the database: {}", username);
         }
-        Collection<SimpleGrantedAuthority> authorities = grantAuthorities(user);
-        return new org.springframework.security.core.userdetails.User(user.getUsername(), user.getPassword(), authorities);
     }
 
     private Collection<SimpleGrantedAuthority> grantAuthorities(User user) {
@@ -48,6 +52,14 @@ public class UserServiceImplementation implements UserService, UserDetailsServic
         return authorities;
     }
 
+
+    /**
+     * Hashes and salts the password
+     * (passwordEncoder.encode() - encodes the password by applying an SHA-1 algorithm combined with an 8-byte randomly generated salt)
+     *
+     * @param user
+     * @return
+     */
     @Override
     public User saveUser(User user) {
         log.info("Saving new user {} to the database", user.getName());

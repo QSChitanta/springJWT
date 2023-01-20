@@ -18,6 +18,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -26,6 +27,13 @@ import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 @Slf4j
 public class CustomAuthenticationFilter extends UsernamePasswordAuthenticationFilter {
     private final AuthenticationManager authenticationManager;
+    private final int TEN_MINUTES = 10 * 60 * 1000;
+    private final int THIRTY_MINUTES = 30 * 60 * 1000;
+
+    /**
+     * nur für dieses Beispiel ist es so simple, eigentlich eine sichere Zeichenkombinatio !NICHT im quell text System.Env
+     */
+    private final String SECRET = "secret";
 
     /**
      * gets user credentials to pass on to the attemptAuthentication method
@@ -36,11 +44,7 @@ public class CustomAuthenticationFilter extends UsernamePasswordAuthenticationFi
     }
 
     /**
-     * authenticates login "login is successful"
-     * @param request from which to extract parameters and perform the authentication
-     * @param response the response, which may be needed if the implementation has to do a
-     * redirect as part of a multi-stage authentication process (such as OpenID).
-     * @return
+     * authenticates user: "login is successful" : "username or password not found"
      * @throws AuthenticationException
      */
     @Override
@@ -54,33 +58,39 @@ public class CustomAuthenticationFilter extends UsernamePasswordAuthenticationFi
     }
 
     /**
-     * sends access token and the refresh token to the user
-     * @param request
-     * @param response
-     * @param chain
-     * @param authentication the object returned from the <tt>attemptAuthentication</tt>
-     * method.
-     * @throws IOException
-     * @throws ServletException
+     * creates and sends access token and the refresh token to the user after successful authentication
      */
     @Override
-    protected void successfulAuthentication(HttpServletRequest request, HttpServletResponse response, FilterChain chain, Authentication authentication) throws IOException, ServletException {
+    protected void successfulAuthentication(HttpServletRequest request, HttpServletResponse response, FilterChain chain,
+                                            Authentication authentication) throws IOException, ServletException {
         User user = (User) authentication.getPrincipal();
-        Algorithm algorithm = Algorithm.HMAC256("secret".getBytes());
+        List<String> collectedUserAuthorities = user.getAuthorities().stream().map(GrantedAuthority::getAuthority).collect(Collectors.toList());
+
+        // 1. customize and create the JWT access token using the HMAC256 Algorithm.
+        // 2. saves users roles(authority) inside JWT
+        Algorithm algorithm = Algorithm.HMAC256(SECRET.getBytes());
         String access_token = com.auth0.jwt.JWT.create()
                 .withSubject(user.getUsername())
-                .withExpiresAt(new Date(System.currentTimeMillis() + 10 * 60 * 1000))
+                .withExpiresAt(new Date(System.currentTimeMillis() + TEN_MINUTES))
                 .withIssuer(request.getRequestURL().toString())
-                .withClaim("roles", user.getAuthorities().stream().map(GrantedAuthority::getAuthority).collect(Collectors.toList()))
+                .withClaim("roles", collectedUserAuthorities)
                 .sign(algorithm);
+
+
+
+        // 3. creates refresh token with an extended expiration date
         String refresh_token = com.auth0.jwt.JWT.create()
                 .withSubject(user.getUsername())
-                .withExpiresAt(new Date(System.currentTimeMillis() + 30 * 60 * 1000))
+                .withExpiresAt(new Date(System.currentTimeMillis() + THIRTY_MINUTES))
                 .withIssuer(request.getRequestURL().toString())
                 .sign(algorithm);
+
+        // 4. package the token inside a HashMap and ....
         Map<String, String> tokens = new HashMap<>();
         tokens.put("access_token", access_token);
         tokens.put("refresh_token", refresh_token);
+
+        // 4.1 ... parse it into the content inside the JSON Object Response object
         response.setContentType(APPLICATION_JSON_VALUE);
         new ObjectMapper().writeValue(response.getOutputStream(), tokens);
     }
